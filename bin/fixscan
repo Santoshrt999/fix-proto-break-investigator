@@ -1,0 +1,36 @@
+#!/bin/sh
+# fixscan - read-only FIX log break scanner. Builds the engine jar on first use, then runs it.
+set -e
+
+# Resolve the real location of this script, following symlinks.
+SELF=$0
+while [ -L "$SELF" ]; do
+  LINK=$(readlink "$SELF")
+  case $LINK in
+    /*) SELF=$LINK ;;
+    *) SELF=$(dirname "$SELF")/$LINK ;;
+  esac
+done
+ROOT=$(CDPATH= cd -- "$(dirname -- "$SELF")/.." && pwd)
+JAR="$ROOT/engine/target/fixscan.jar"
+
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+  JAVA="$JAVA_HOME/bin/java"
+else
+  JAVA=java
+fi
+if ! command -v "$JAVA" >/dev/null 2>&1; then
+  echo "fixscan: Java 21 or newer is required but 'java' was not found. Install a JDK or set JAVA_HOME." >&2
+  exit 127
+fi
+
+if [ ! -f "$JAR" ]; then
+  echo "fixscan: building the engine (first run only)..." >&2
+  if ! (cd "$ROOT/engine" && ./mvnw -q -B -DskipTests package) >&2; then
+    echo "fixscan: build failed. It needs a JDK 21+ and, the first time, network access to Maven Central." >&2
+    echo "fixscan: to build by hand: cd \"$ROOT/engine\" && ./mvnw -DskipTests package" >&2
+    exit 1
+  fi
+fi
+
+exec "$JAVA" -jar "$JAR" "$@"

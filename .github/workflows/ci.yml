@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and test the engine
+        working-directory: engine
+        run: ./mvnw -B -ntp verify
+
+      - name: Smoke-test the fixscan wrapper on the sample log
+        run: |
+          bin/fixscan stats samples/day1.log > /dev/null
+          bin/fixscan scan samples/day1.log --limit 5 > /dev/null
+          bin/fixscan order ORD-000018 samples/day1.log > /dev/null
+
+      - name: Committed samples match the generator
+        run: |
+          bin/fixscan generate --out samples/day1.log --expected samples/expected-findings.json > /dev/null
+          git diff --exit-code -- samples/
+
+      - name: Plugin manifests are valid JSON
+        run: |
+          python3 -m json.tool .claude-plugin/plugin.json > /dev/null
+          python3 -m json.tool .claude-plugin/marketplace.json > /dev/null

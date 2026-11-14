@@ -22,6 +22,7 @@ log this is).
 - [SEQ_GAP](#seq_gap)
 - [INVALID_STATE_TRANSITION](#invalid_state_transition)
 - [PARSE_ERROR](#parse_error)
+- [Booking mismatches (no rule)](#booking-mismatches-no-rule)
 - [Combinations worth recognising](#combinations-worth-recognising)
 
 ---
@@ -324,7 +325,7 @@ appears as a ClOrdID(11) in the log.
 
 **Check next.**
 - `fixscan stats`: when does the log start? Compare with the time of the request.
-- `fixscan grep 11=<prefix>*` with the leading part of the unknown id: do similar ids exist?
+- `fixscan grep '11=<prefix>*'` (quoted) with the leading part of the unknown id: do similar ids exist?
   A near-miss suggests a typo or a different id scheme.
 - `fixscan grep 37=<OrderID>` if any message in the chain carries an OrderID: it may link to
   the real order.
@@ -419,6 +420,39 @@ truncated or malformed. Grouped per kind and file.
 
 **Who to contact.** Whoever supplied the log (ask for the raw, unedited file) or the team that
 owns the logging pipeline.
+
+---
+
+## Booking mismatches (no rule)
+
+**Symptom.** The user says the booked quantity, price or number of trades differs from what was
+executed. fixscan has no booking data, so there is no finding for this directly: establish what
+FIX says was executed and compare it with what the user tells you was booked.
+
+**What FIX says was executed.** From `fixscan order <id>`: `cumQty`, `avgPx`, and each trade
+report in the timeline (ExecID, LastQty, LastPx, TransactTime). Write them out as a small table.
+Executions that were busted (150=H) or corrected (150=G) change the totals: include them.
+
+**Likely causes, by the shape of the difference.**
+
+| Booked vs FIX | Usual cause | Look for |
+| --- | --- | --- |
+| Booked more | Same execution booked twice | DUPLICATE_EXEC; two trade reports with one ExecID; a resend after a reconnect |
+| Booked more | Fill after cancel counted, or overfill booked | INVALID_STATE_TRANSITION, OVERFILL |
+| Booked less | A fill was never received or not processed | SEQ_GAP (unrecovered) near the fill time; QTY_MISMATCH (CumQty jumps by more than LastQty) |
+| Booked less | Order still working when booking ran | STUCK_PARTIAL; fills after the booking cut-off time |
+| Booked less or more | A bust or correction not applied on one side | `grep 150=H`, `grep 150=G` on the order; ExecRefID(19) names the execution affected |
+| Price differs | Booking used one fill's LastPx, or recomputed AvgPx differently | Compare `avgPx` with the quantity-weighted mean of LastPx; corrections (150=G) |
+| Price or qty differs | Booked from a different order in the chain or a different order with the same ClOrdID | `order` `matches` > 1; the amend chain's terms |
+
+**Check next.**
+- `fixscan order <id>`: the authoritative list of executions as received.
+- `fixscan grep 17=<ExecID>`: whether an ExecID appears more than once.
+- `fixscan session <session>`: gaps or resends around the fills.
+
+**Who to contact.** Middle office / booking team with the table of ExecIDs, quantities and
+prices from FIX. Counterparty if their reported totals (CumQty, AvgPx) disagree with their own
+individual fills. FIX connectivity team if a gap explains a missing fill.
 
 ---
 

@@ -1,8 +1,9 @@
 # fixscan output reference
 
 What each command returns and how to read it. Every response is one JSON object with
-`command` and `masking` (`"on"` unless `--no-mask` was given). Errors are
-`{"error": "..."}` with exit code 2. Times are ISO-8601 UTC. `at` is always `file:line` using
+`command`; the commands that read logs also have `masking` (`"on"` unless `--no-mask` was
+given). Errors are `{"error": "..."}` with exit code 2 for a wrong command or option (unknown
+rule or session in `scan`, bad time, masked grep value) and 1 for a file problem. Times are ISO-8601 UTC. `at` is always `file:line` using
 the file's base name (for example `day1.log:82`): cite it exactly as printed.
 
 ## Contents
@@ -31,12 +32,12 @@ ORDER_REJECTED on the order the user asked about matters more than an unrelated 
 | DUPLICATE_EXEC | HIGH | ExecID(17) repeated without PossDupFlag(43)=Y or PossResend(97)=Y |
 | QTY_MISMATCH | HIGH | sum of LastQty(32) != CumQty(14), or LeavesQty(151) != OrderQty - CumQty on a live order |
 | NO_ACK | HIGH if no ExecutionReport ever arrives; MEDIUM if it arrives after the timeout | NewOrderSingle unanswered for `--ack-timeout` seconds (default 30) |
-| SEQ_GAP | HIGH if unrecovered or MsgSeqNum went backwards; LOW if recovered | MsgSeqNum(34) jumped or went back |
+| SEQ_GAP | HIGH if unrecovered, skipped by a SequenceReset without GapFill, or MsgSeqNum went backwards; LOW if recovered | MsgSeqNum(34) jumped or went back, or a hard SequenceReset skipped or lowered numbers |
 | ORDER_REJECTED | MEDIUM | ExecType(150)=8 or OrdStatus(39)=8 |
 | CANCEL_REPLACE_REJECTED | MEDIUM | OrderCancelReject (35=9) received |
 | STUCK_PARTIAL | MEDIUM | CumQty > 0 and no terminal state by end of log |
 | BROKEN_CHAIN | MEDIUM | OrigClOrdID(41) refers to a ClOrdID never seen in the log |
-| PARSE_ERROR | LOW | bad CheckSum(10), bad BodyLength(9), truncated or malformed lines (grouped) |
+| PARSE_ERROR | LOW | bad CheckSum(10), bad BodyLength(9), truncated or malformed lines, or a `.gz` file that ends early (grouped) |
 
 Heartbeat silences and unanswered TestRequests are not findings on their own; they show up in
 `session` and in `scan`'s `summary.sessions[].heartbeatGaps`.
@@ -66,7 +67,7 @@ Use the session `name` exactly as printed in `--session` and in `fixscan session
 | `summary.parseErrors` | Total parse problems |
 | `summary.findings` | Total findings **after** filters |
 | `summary.bySeverity`, `summary.byRule` | Counts after filters |
-| `findings[]` | Most severe first, then by time; at most `--limit` (default 50) |
+| `findings[]` | Most severe first, then by time; at most `--limit` (default 50). `--severity S` keeps S and above |
 | `omitted` | How many findings were not shown. Narrow the scan rather than raise `--limit` |
 | `hint` | What to do next when output was cut |
 
@@ -76,16 +77,18 @@ Use the session `name` exactly as printed in `--session` and in `fixscan session
 | --- | --- |
 | `id` | `RULE-n`, unique within one run (do not rely on it across runs) |
 | `ruleId`, `severity` | See the table above |
-| `session` | `SENDER-TARGET`, or null (parse errors) |
-| `clOrdIds` | The order's amend/cancel chain, oldest first; empty for session findings. Use any of them with `fixscan order` |
-| `firstTime` | When the story started (usually the NewOrderSingle) |
+| `session` | `SENDER-TARGET`; left out for parse errors |
+| `clOrdIds` | The order's amend/cancel chain, oldest first; left out for session and parse findings. Use any of them with `fixscan order` |
+| `firstTime` | When the story started (usually the NewOrderSingle); left out when it equals `time` |
 | `time` | When the break was detected |
 | `summary` | One line with the key values, already decoded |
 | `evidence[]` | Up to 5 lines: `at` (file:line) and `excerpt` (masked `tag=value|...`). Inside `order` output, evidence is just the list of `file:line` |
 
 ## order
 
-Accepts a ClOrdID (any id in the chain) or an OrderID(37).
+Accepts a ClOrdID (any id in the chain) or an OrderID(37). A ClOrdID reused on a later day, or
+after a sequence reset, is a separate order, so `matches` can be more than 1. At most 5 orders
+are listed.
 
 | Field | Meaning |
 | --- | --- |
@@ -99,8 +102,8 @@ Accepts a ClOrdID (any id in the chain) or an OrderID(37).
 | `sumOfFills` | Sum of LastQty over trade reports. Should equal `cumQty` |
 | `newOrderSeen` | false: the NewOrderSingle is not in these files |
 | `note` | Explains a missing NewOrderSingle or a placeholder order (only referenced as OrigClOrdID) |
-| `rejectedBeforeAck` | true if the first response was a reject |
-| `ackLatencyMs` | Time from NewOrderSingle to first ExecutionReport |
+| `rejectedBeforeAck` | Present (true) only when the order was refused by a session Reject (35=3) or BusinessMessageReject (35=j) before any ExecutionReport |
+| `ackLatencyMs` | Time from NewOrderSingle to the first ExecutionReport, which may itself be a reject (150=8) |
 | `unansweredRequests[]` | Cancel/replace requests with no response: `clOrdId`, `type`, `at`, `time` |
 | `timeline[]` | Every message of the chain, oldest first: `at`, `time`, `from`, `msgType`, then key fields decoded (`ExecType`, `OrdStatus`, `LastQty`, `CumQty`, `OrdRejReason`, `Text`...) |
 | `timelineOmitted`, `timelineNote` | Present when the timeline exceeded `--limit` (default 200): the first and last entries are kept |
@@ -133,6 +136,13 @@ messages were never recovered (they may have been acks or fills).
 Query: `tag=value` terms separated by commas, all of which must match. `value` may contain `*`
 (quote the query in the shell). A bare tag (`103`) matches when the tag is present. Tag names
 from the dictionary work in place of numbers (`ClOrdID=ORD-1`).
+
+- Values are raw wire codes: `39=8`, not `39=Rejected`. A value cannot contain a comma; use `*`
+  around the part you know instead.
+- With masking on, a value on a masked tag is refused with an error (it would reveal masked
+  data); use the bare tag. Text(58) is matched as it is shown, after masking, so
+  `'58=*closing auction*'` works but searching for a masked name finds nothing.
+- Long field values are cut at 300 characters.
 
 | Field | Meaning |
 | --- | --- |

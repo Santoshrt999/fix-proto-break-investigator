@@ -188,8 +188,9 @@ within the log; MEDIUM: arrived late).
 - `fixscan session <session>`: any heartbeat silence, unanswered TestRequest, sequence gap or
   logout around the order's time? A gap in the counterparty-to-you direction just after the
   order supports cause 3; silence supports 1 or 2.
-- `fixscan grep 35=D --since <t-1m> --until <t+1m> --session <session>` and compare with
-  `grep 35=8` over the same window: were other orders acknowledged at that time? If they were,
+- `fixscan grep 35=D --since <T1> --until <T2> --session <session>`, where T1/T2 are ISO UTC
+  times about a minute either side of the order (e.g. `2026-01-05T09:45:00` and
+  `2026-01-05T09:47:00`), and compare with `grep 35=8` over the same window: were other orders acknowledged at that time? If they were,
   the session was healthy and the problem is specific to this order.
 - `fixscan order <ClOrdID>`: confirm nothing at all came back, including a late reject.
 - `fixscan stats`: does the log continue well past the order? If it ends within seconds, it
@@ -343,7 +344,9 @@ incomplete: ask ops for the earlier log file.
 
 **Symptom.** MsgSeqNum(34) skipped ahead in one direction (messages missing), or went backwards
 without PossDupFlag. The finding says whether a ResendRequest was sent and whether the gap was
-recovered. LOW if recovered, HIGH if not.
+recovered. LOW if recovered, HIGH if not. A SequenceReset without GapFill (35=4 without
+123=Y) that jumps ahead is also reported, as an unrecoverable gap: the sender declared those
+messages lost. One that lowers the number is reported as not allowed by the FIX spec.
 
 **Likely causes.**
 1. Network interruption or a slow consumer: messages dropped, usually with a heartbeat silence
@@ -431,7 +434,8 @@ FIX says was executed and compare it with what the user tells you was booked.
 
 **What FIX says was executed.** From `fixscan order <id>`: `cumQty`, `avgPx`, and each trade
 report in the timeline (ExecID, LastQty, LastPx, TransactTime). Write them out as a small table.
-Executions that were busted (150=H) or corrected (150=G) change the totals: include them.
+Executions that were busted (150=H) or corrected (150=G) change the totals: include them. In FIX
+4.2 logs, busts and corrections are ExecTransType 20=1 and 20=2.
 
 **Likely causes, by the shape of the difference.**
 
@@ -441,7 +445,7 @@ Executions that were busted (150=H) or corrected (150=G) change the totals: incl
 | Booked more | Fill after cancel counted, or overfill booked | INVALID_STATE_TRANSITION, OVERFILL |
 | Booked less | A fill was never received or not processed | SEQ_GAP (unrecovered) near the fill time; QTY_MISMATCH (CumQty jumps by more than LastQty) |
 | Booked less | Order still working when booking ran | STUCK_PARTIAL; fills after the booking cut-off time |
-| Booked less or more | A bust or correction not applied on one side | `grep 150=H`, `grep 150=G` on the order; ExecRefID(19) names the execution affected |
+| Booked less or more | A bust or correction not applied on one side | `grep 150=H`, `grep 150=G` (FIX 4.2: `grep 20=1`, `grep 20=2`) on the order; ExecRefID(19) names the execution affected |
 | Price differs | Booking used one fill's LastPx, or recomputed AvgPx differently | Compare `avgPx` with the quantity-weighted mean of LastPx; corrections (150=G) |
 | Price or qty differs | Booked from a different order in the chain or a different order with the same ClOrdID | `order` `matches` > 1; the amend chain's terms |
 

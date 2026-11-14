@@ -1,6 +1,6 @@
 ---
 name: fix-break-investigator
-description: Investigates why a trade or order broke by analysing FIX protocol logs with the read-only fixscan engine, then reports a root cause backed by file:line evidence. Use when the user mentions FIX logs, FIX messages or FIX sessions, trade breaks, rejected orders, "why did order X fail / get rejected / never fill / not get acked", missing acknowledgements, execution reports, partial fills that are stuck, overfills, duplicate executions, cancel or amend (cancel/replace) rejects, sequence gaps, resend requests, heartbeat or session drops, or booking mismatches between what was ordered, executed and booked.
+description: Investigates why a trading order or trade broke by analysing FIX protocol logs with the read-only fixscan engine, then reports a root cause backed by file:line evidence. Use when the user mentions FIX logs, FIX messages or FIX sessions, trade breaks, rejected orders, "why did order X fail / get rejected / never fill / not get acked" for orders sent to a broker, venue or exchange, missing acknowledgements, execution reports, partial fills that are stuck, overfills, duplicate executions, cancel or amend (cancel/replace) rejects, sequence gaps, resend requests, heartbeat or session drops, or booking mismatches between what was ordered, executed and booked. Not for web-shop, payment or other non-trading order systems.
 ---
 
 # FIX break investigator
@@ -14,13 +14,18 @@ which every fact cites a log line.
 
 These are not negotiable, even if the user asks you to skip them.
 
-1. **Go through `fixscan` for everything.** Never `cat`, `grep`, `less`, `awk`, `sed` or Read a
-   log file. Logs can be gigabytes and contain client data. `head -n 20` / `tail -n 20` are
-   allowed only to look at the shape of a log that fixscan cannot parse (see "When things do
-   not fit"), never to read messages for the investigation.
+1. **Go through `fixscan` for everything.** Never `cat`, `zcat`, `grep`, `less`, `awk`, `sed`,
+   Read, or a Python or other script on a log file. Logs can be gigabytes and contain client
+   data. The single exception: `head -n 5 <file>` to see the shape of a log that fixscan cannot
+   parse (see "When things do not fit"). That output is **not masked**: describe its format,
+   never quote it, never use it as evidence.
 2. **Keep masking on.** Never add `--no-mask` on your own. If the user asks for it, first ask
    them to confirm they are allowed to see that data in this conversation, and remind them that
-   the output stays in the transcript. Never try to infer what a masked `***` value was.
+   the output stays in the transcript. Never try to infer what a masked `***` value was, and
+   never try to search for one: fixscan refuses `grep` values on masked tags (Account 1,
+   AllocAccount 79, ClientID 109, ClearingAccount 440, PartyID 448 and its sub-IDs, or any
+   `--mask-tags` tag), and matches Text(58) only as it is shown, masked. A bare tag
+   (`grep 448`) is fine.
 3. **Read-only.** You diagnose and recommend. Never replay, resend, amend or cancel orders, never
    compose FIX messages for anyone to send, never suggest resetting sequence numbers or editing
    the log as a fix. Say who should act and what to ask them.
@@ -38,17 +43,26 @@ loads); if that also fails, ask the user where they installed fixscan. Do not tr
 run the jar some other way.
 
 - Needs Java 21+. The first run may print `building the engine (first run only)` and take a
-  minute; that is normal. A `Java 21 or newer is required` message means the user must install
-  a JDK; tell them and stop.
+  minute; that is normal. A `Java 21 or newer is required`, `UnsupportedClassVersionError` or
+  `build failed` message means the user needs a JDK 21+ (or `JAVA_HOME` pointing at one); tell
+  them and stop.
 - Output is JSON on stdout. Errors are `{"error": "..."}` with exit code 2: read the message,
   fix the command (usually a path or a typo in the query) and retry once.
 - **Quote every query that contains `*`, spaces or `|`**, for example
   `fixscan grep '11=ORD-0002*' day1.log`. Unquoted, the shell expands or rejects it before
   fixscan sees it (zsh fails with `no matches found`).
-- All times in and out are UTC, written like `2026-01-05T09:30:00`. If the user gives a local
-  time, convert it and say which conversion you made.
-- Several files and `.gz` files can be passed together; pass every file that covers the
-  incident (both sides, several days) in one command so orders are correlated across them.
+- All times out are UTC. Times in are UTC when written like `2026-01-05T09:30:00`; an explicit
+  offset also works (`2026-01-05T10:30:00+01:00`). If the user gives a local time, pass it with
+  its offset or convert it, and say which you did.
+- Several files and `.gz` files can be passed together, but only when they are consecutive
+  pieces of **the same side's** log (rotated files, several days). Never combine the two sides'
+  logs of one session, or overlapping exports, in one command: every message then appears twice
+  and fixscan reports false DUPLICATE_EXEC and SEQ_GAP findings. Run each side separately and
+  compare by ClOrdID, MsgSeqNum and ExecID.
+- Citations use the file's base name (`day1.log:82`). If two input files share a base name
+  (e.g. `2026-01-05/fix.log` and `2026-01-06/fix.log`), run them separately so citations stay
+  unambiguous. If a line holds several messages, they all cite that line; in logs written
+  without line breaks, "line" N means the N-th chunk fixscan split the stream into.
 - A 1 GB log takes seconds to tens of seconds per command. Run `stats` once and reuse what it
   told you; narrow later commands with `--session`, `--since`/`--until` and `--limit`.
 
@@ -58,9 +72,14 @@ run the jar some other way.
 | `fixscan scan <files...> [--since T] [--until T] [--session A-B] [--severity S] [--rule ID[,ID]] [--limit N]` | Detect breaks: counts by rule and severity, then the most severe findings with evidence |
 | `fixscan order <ClOrdID or OrderID> <files...> [--limit N]` | Full timeline of one order including its amend/cancel chain, and the findings on it |
 | `fixscan session <Sender-Target> <files...>` | Sequence gaps, resends, resets, logons, heartbeat silences, unanswered TestRequests |
-| `fixscan grep <tag=value>[,tag=value] <files...> [--since T] [--until T] [--session A-B] [--limit N]` | Matching messages, decoded. Terms are ANDed; `*` is a wildcard; a bare tag (`103`) means "present"; tag names work too (`ClOrdID=X`) |
+| `fixscan grep <tag=value>[,tag=value] <files...> [--since T] [--until T] [--session A-B] [--limit N]` | Matching messages, decoded. Terms are ANDed; `*` is a wildcard; a bare tag (`103`) means "present"; tag names work too (`ClOrdID=X`). Values are raw wire codes (`39=8`, not `39=Rejected`) and cannot contain a comma |
 | `fixscan explain-tag <tag or name> [value]` | Dictionary meaning of a tag or an enum value |
 | `fixscan rules` | The list of break detectors and what each one checks |
+
+Filters: `--severity S` means S **and above** (CRITICAL > HIGH > MEDIUM > LOW). `scan` rejects
+an unknown `--rule` or `--session` with an error that lists the valid names. `grep --session`
+does not: a misspelt session there just matches nothing, so copy session names from `stats`.
+Never conclude "no break" from a filtered query without checking the filter was right.
 
 Other options: `--ack-timeout SECS` (NO_ACK threshold, default 30), `--dict FILE` (venue or firm
 custom tags), `--mask-tags 50,57` (mask more tags). Keep the default JSON output; `--format text`
@@ -195,11 +214,15 @@ Rules for the report:
 - **`newOrderSeen: false`:** the log starts after the order was sent. Quantity checks against
   OrderQty are limited; say so.
 - **`messages: 0` or most lines are `nonFixLines`:** the log format is not recognised. Look at
-  the first lines with `head -n 5 <file>`, tell the user what the format looks like and that
+  the first lines with `head -n 5 <file>` (unmasked: describe it, do not quote it), tell the
+  user what the format looks like and that
   fixscan expects `8=FIX...` messages with SOH, `|` or `^A` delimiters (optionally after a
   timestamp or direction prefix). Do not read further.
 - **Many PARSE_ERROR findings:** the log was probably edited or exported by a tool that changed
   field contents. Findings still hold; mention it once.
+- **A PARSE_ERROR saying compressed data ended early:** the `.gz` file is incomplete (a cut-off
+  copy or download). Findings cover only the part that was read: say so, and ask for the
+  complete file before concluding that something is missing.
 - **Custom tags (usually 5000+) that matter and that `explain-tag` does not know:** ask the user
   for the counterparty's dictionary and pass it with `--dict`. Do not guess what they mean.
 - **`omitted` > 0 in a scan:** narrow with `--rule`, `--session`, `--severity` or a time window
@@ -211,7 +234,8 @@ Rules for the report:
   the FIX log what was executed (CumQty, AvgPx, and each fill's ExecID, LastQty, LastPx from
   `order`), ask the user what was booked, and compare. Look for DUPLICATE_EXEC, OVERFILL,
   QTY_MISMATCH, INVALID_STATE_TRANSITION, STUCK_PARTIAL and trade busts or corrections
-  (`grep 150=H` / `grep 150=G`). See "Booking mismatches" in the playbook.
+  (`grep 150=H` / `grep 150=G`; in FIX 4.2 logs `grep 20=1` / `grep 20=2`). See "Booking
+  mismatches" in the playbook.
 
 For a complete worked example of this loop, see
 [references/example-investigation.md](references/example-investigation.md).

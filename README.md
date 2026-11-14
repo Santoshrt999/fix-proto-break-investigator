@@ -49,7 +49,7 @@ ORD-000018 (Buy 50,000 UMBRELLA @ 310) was rejected by BROKERX because its notio
 
 | | |
 | --- | --- |
-| 🧮 **Deterministic engine** | `fixscan` (Java 21, zero runtime dependencies) streams gigabyte logs, correlates every message by order and session, and runs 12 break detectors |
+| 🧮 **Deterministic engine** | `fixscan` (Java 21, zero runtime dependencies) streams gigabyte logs, correlates every message by order and session, and runs 13 break detectors |
 | 🧠 **Investigator skill** | Claude follows a fixed loop: scope, triage, hypothesise, verify, report. It never claims a cause without a `file:line` |
 | 🔒 **Private by default** | Accounts, client and party IDs are masked. Raw logs never go to the model in bulk, only small filtered JSON |
 | 🛡️ **Read-only** | Diagnoses and suggests who to contact. Never sends, replays, amends or cancels anything |
@@ -262,7 +262,7 @@ All of these also work inside Claude Code as `/plugin ...`.
 
 ---
 
-## 🧑‍💻 Using the skill step by step
+## 💬 Using the skill step by step
 
 The plugin provides **one skill: `fix-break-investigator`**. There is nothing else to run.
 
@@ -334,7 +334,7 @@ Each of these is planted in `samples/day1.log`:
 | Why did our cancel on **ORD-000181** fail? | Broken chain: OrigClOrdID ORD-900001 unknown |
 | **ORD-000195** was cancelled but then filled? | Fill reported after Canceled |
 | Client says they cancelled **ORD-000211** but got filled | Cancel rejected in the closing auction, then filled 600/1500 |
-| Was anything wrong with the **BROKERY** session? | 95 s silence, 3 messages missing, resend never answered |
+| Was anything wrong with the **BROKERY** session? | No message for 115 s, 3 messages missing, resend never answered |
 
 ### What is inside the skill
 
@@ -443,13 +443,13 @@ delimiters and common log prefixes (ISO timestamps, QuickFIX/J-style lines) are 
 | Command | What it does |
 | --- | --- |
 | `fixscan stats <files...>` | Message counts by type, sessions, time range, parse errors |
-| `fixscan scan <files...> [--since T] [--until T] [--session A-B] [--severity S] [--rule ID] [--limit 50]` | Summary by rule and severity, plus the most severe findings with evidence |
+| `fixscan scan <files...> [--since T] [--until T] [--session A-B] [--severity S] [--rule ID] [--limit 50]` | Summary by rule and severity, plus the most severe findings with evidence. `--severity S` keeps S and above; an unknown rule or session is an error |
 | `fixscan order <ClOrdID\|OrderID> <files...>` | Full lifecycle timeline of one order, including its amend/cancel chain |
 | `fixscan session <Sender-Target> <files...>` | Sequence gaps, resends, resets, logons, heartbeat health |
-| `fixscan grep <tag=value>[,tag=value] <files...> [--limit N]` | Matching messages, decoded and masked. `*` wildcards (quote them), tag names allowed |
+| `fixscan grep <tag=value>[,tag=value] <files...> [--since T] [--until T] [--session A-B] [--limit N]` | Matching messages, decoded and masked. `*` wildcards (quote them), tag names allowed, raw wire values (`39=8`). Values on masked tags are refused |
 | `fixscan explain-tag <tag> [value]` | Dictionary meaning of a tag or enum value |
 | `fixscan rules` | List the break detectors |
-| `fixscan generate` | Regenerate the synthetic sample log (fixed seed) |
+| `fixscan generate [--out f] [--expected f] [--force]` | Regenerate the synthetic sample log (fixed seed). Never overwrites an existing file without `--force` |
 
 | Option | Meaning |
 | --- | --- |
@@ -457,24 +457,36 @@ delimiters and common log prefixes (ISO timestamps, QuickFIX/J-style lines) are 
 | `--dict FILE` | Add or override tag definitions for venue or firm custom tags (same JSON shape as the built-in dictionary) |
 | `--mask-tags 50,57` | Mask more tags |
 | `--no-mask` | Turn masking off (prints a warning) |
+| `--since` / `--until` | UTC by default (`2026-01-05T09:30:00`); an offset also works (`2026-01-05T10:30:00+01:00`) |
 | `FIXSCAN_JAVA_OPTS` | JVM options, for example `-Xmx6g` for multi-gigabyte logs |
 
 Every finding carries an id, rule, severity, session, ClOrdID chain, timestamps, a one-line
 summary and up to five evidence lines (`file:line` plus the masked message).
 
+Input handling worth knowing: several messages on one line are all read; logs written without
+line breaks (raw message stores) are split at message boundaries; a cut-off `.gz` file is read
+as far as it goes and reported as a PARSE_ERROR; sequence resets and ClOrdIDs reused on a later
+day are handled without false breaks.
+
 ---
 
 ## 🔒 Privacy and masking
 
-- **Masking is on by default.** Account(1), ClientID(109) and PartyID(448) become `***`. In
-  Text(58), account-like tokens, email addresses and names or IDs after cue words (account,
-  client, trader, user...) are masked, and the reject reason stays readable. Add tags with
+- **Masking is on by default.** Account(1), AllocAccount(79), ClientID(109), EncodedText(355),
+  ClearingAccount(440), PartyID(448), PartySubID(523) and NestedPartyID(524) become `***`, and
+  their values are never decoded or searchable. In Text(58), emails, phone numbers,
+  account-like numbers and names, IDs or login handles after cue words (account, ClientID,
+  trader, user, owner...) are masked, and the reject reason stays readable. Add tags with
   `--mask-tags`.
+- **Text masking is best effort.** A name with no cue word before it can stay visible. Use
+  `--mask-tags 58` to hide Text completely.
 - **`--no-mask`** turns masking off and prints a warning. The skill only uses it if you ask and
   confirm you may see that data.
-- **Read-only.** fixscan never writes to logs and never opens a network connection.
-- **Small output only.** The skill never reads whole log files; only fixscan's filtered, capped
-  JSON reaches the model.
+- **Read-only.** fixscan never writes to logs and never opens a network connection. The only
+  command that writes is `generate`, and it refuses to overwrite a file unless given `--force`.
+- **Small output only.** The skill never reads whole log files; fixscan's filtered, capped JSON
+  is what reaches the model. The one exception: if fixscan cannot parse a log at all, the skill
+  may look at its first 5 lines to describe the format, without quoting them.
 - **Synthetic data.** This repository uses only public FIX specifications and generated data.
   BUYSIDE1, BROKERX and BROKERY are fictitious.
 
@@ -492,6 +504,9 @@ summary and up to five evidence lines (`file:line` plus the masked message).
 | The skill does not start | Mention FIX logs or an order ID, or call it with `/fix-break-investigator:fix-break-investigator` |
 | `no matches found` from the shell | Quote wildcard queries: `fixscan grep '11=ORD-0002*' file.log` |
 | `messages: 0` in `stats` | The log format is not recognised: fixscan expects `8=FIX...` messages, optionally after a prefix |
+| `generate: ... already exists` | `generate` never overwrites a file by default. Pass `--force`, or choose another `--out` |
+| A PARSE_ERROR says compressed data ended early | The `.gz` file is incomplete; results cover only the part that was read. Get the complete file |
+| `grep: ... is masked` | Searching values of masked tags is refused. Use the bare tag (`grep 1`), or `--no-mask` if you may see that data |
 | Custom tags show as unknown | Pass the venue's dictionary with `--dict` |
 
 ---
@@ -508,7 +523,7 @@ log takes seconds to tens of seconds depending on the machine.
 
 | Phase | Scope |
 | --- | --- |
-| ✅ **1** | FIX log engine, 12 break detectors, investigator skill (this release) |
+| ✅ **1** | FIX log engine, 13 break detectors, investigator skill (this release) |
 | **2** | Protobuf / JSON booking events through a pluggable `EventSource` |
 | **3** | FIX-versus-booking reconciliation |
 | **4** | Splunk / ELK connectors |

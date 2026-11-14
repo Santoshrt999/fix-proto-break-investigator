@@ -32,7 +32,7 @@ jobs:
 
       - name: Committed samples match the generator
         run: |
-          bin/fixscan generate --out samples/day1.log --expected samples/expected-findings.json > /dev/null
+          bin/fixscan generate --out samples/day1.log --expected samples/expected-findings.json --force > /dev/null
           git diff --exit-code -- samples/
 
       - name: Plugin manifests are valid JSON

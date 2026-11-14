@@ -65,8 +65,9 @@ From the `order` timeline:
 
 - Hypothesis 2, **ruled out**: the cancel's OrigClOrdID is ORD-000213, the latest accepted
   replace (day1.log:881), and the reason is 0 (Too late), not 1 (Unknown order).
-- Hypothesis 3, **ruled out**: at the reject the order was still New with CumQty 0
-  (day1.log:883); the fill came 438 ms later (day1.log:884). Nothing had traded when the cancel
+- Hypothesis 3, **ruled out**: the reject reports the order as New (OrdStatus 0, day1.log:883),
+  and the last report before it shows CumQty 0 (day1.log:881); the fill came 438 ms later
+  (day1.log:884). Nothing had traded when the cancel
   was refused.
 - Hypothesis 4, **ruled out**: `fixscan session BUYSIDE1-BROKERX` shows health DEGRADED only
   because of one recovered gap at 09:45 (day1.log:353), long before this order. No silence or
@@ -97,14 +98,16 @@ Facts (from the logs):
 - BROKERX rejected it: CxlRejReason(102)=0 Too late to cancel, Text "Too late to cancel: order is
   in closing auction", order status New — day1.log:883
 - 438 ms later BROKERX reported a fill of 600 @ 48.40, CumQty 600, LeavesQty 900 — day1.log:884
-- No further message for this order before the session logged out at 10:15 — STUCK_PARTIAL-2
+- No further message for this order after the fill — day1.log:884 is the last line of the chain;
+  the BUYSIDE1-BROKERX session logs out at day1.log:1069
 Inference (my reading, not proven by the logs):
 - The client may believe the order was cancelled; the remaining 900 could still be working or
   expired at the broker's end of day. Confirm with BROKERX.
 
 ## Ruled out
 - Stale OrigClOrdID: the cancel pointed at the live id ORD-000213 (day1.log:881, day1.log:882).
-- Fill before cancel: status was New with CumQty 0 when the cancel was refused (day1.log:883).
+- Fill before cancel: status was New when the cancel was refused (day1.log:883) and CumQty was
+  still 0 (day1.log:881).
 - Session problem: no gap or silence near 10:07; seq 389 and 390 are consecutive.
 
 ## Suggested next steps

@@ -196,11 +196,19 @@ reset or restarted); no message at all for more than about twice HeartBtInt.
 
 fixscan masks these by default; they show as `***`:
 
-- Account (1), ClientID (109), PartyID (448)
-- Inside Text (58): account-like tokens (letters with a run of 5+ digits, or 9+ digit numbers),
-  email addresses, and identifiers or names following cue words such as "account", "acct",
-  "client", "customer", "trader", "user", "party", "portfolio", "book", "Mr/Mrs/Ms/Dr". The rest
-  of the reject text stays readable, because the reason matters for the diagnosis
+- Account (1), AllocAccount (79), ClientID (109), EncodedText (355), ClearingAccount (440),
+  PartyID (448), PartySubID (523), NestedPartyID (524)
+- Inside Text (58): email addresses, phone numbers, account-like tokens (letters with a run of
+  5+ digits, or standalone numbers of 7+ digits not preceded by an amount word such as
+  "notional", "max" or "limit"), and identifiers, names or login handles after cue words such as
+  "account", "acct", "client", "ClientID", "customer", "trader", "user", "login", "party",
+  "owner", "holder", "portfolio", "book", "Mr/Mrs/Ms/Dr". The rest of the reject text stays
+  readable, because the reason matters for the diagnosis
 - Any extra tags given with `--mask-tags`
 
-Order identifiers (11, 41, 37, 17), symbols, quantities, prices and reject codes are not masked.
+Order identifiers (11, 41, 37, 17), symbols, quantities, prices and reject codes are not masked
+as tags. Inside Text(58), though, a token with a run of 5+ digits (which can include a ClOrdID or
+ExecID from another message) shows as `***`: do not assume a `***` in Text is an account.
+
+Text masking is best effort: a name with no cue word in front of it (for example "for John
+Smith") can stay visible. When that matters, mask Text completely with `--mask-tags 58`.

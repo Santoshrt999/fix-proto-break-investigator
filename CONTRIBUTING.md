@@ -44,7 +44,7 @@ Requires a JDK 21 or newer. `bin/fixscan` builds the jar on first use if it is m
 4. Plant one instance in `SampleGenerator`, regenerate the sample and expected findings, and
    check the golden test passes:
    ```sh
-   bin/fixscan generate --out samples/day1.log --expected samples/expected-findings.json
+   bin/fixscan generate --out samples/day1.log --expected samples/expected-findings.json --force
    cd engine && ./mvnw verify
    ```
    Review the diff of `samples/` by eye: the new break should be the only change in findings.

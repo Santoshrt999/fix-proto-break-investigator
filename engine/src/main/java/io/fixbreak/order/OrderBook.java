@@ -24,7 +24,9 @@ public final class OrderBook {
 
     private static final class SessionOrders {
         final Map<String, OrderState> byClOrdId = new HashMap<>();
-        final LongLongMap execIds = new LongLongMap();
+        /** ExecIDs seen in the current sequence epoch; venues may reuse them after a reset. */
+        LongLongMap execIds = new LongLongMap();
+        int epoch;
     }
 
     /** Recent requests per direction, keyed by MsgSeqNum, so a reject's RefSeqNum(45) can be resolved. */
@@ -59,13 +61,14 @@ public final class OrderBook {
         return all;
     }
 
-    /** Orders whose chain contains this ClOrdID, or whose OrderID(37) equals it. */
+    /**
+     * Orders whose chain contains this ClOrdID (on any session, and on any day if the ID was
+     * reused), or, if there are none, whose OrderID(37) equals it.
+     */
     public List<OrderState> find(String id) {
         List<OrderState> out = new ArrayList<>();
-        for (SessionOrders so : bySession) {
-            if (so == null) continue;
-            OrderState o = so.byClOrdId.get(id);
-            if (o != null && !out.contains(o)) out.add(o);
+        for (OrderState o : all) {
+            if (o.hasClOrdId(id)) out.add(o);
         }
         if (out.isEmpty()) {
             for (OrderState o : all) {
@@ -78,8 +81,22 @@ public final class OrderBook {
     private SessionOrders orders(SessionState s) {
         while (bySession.size() <= s.id) bySession.add(null);
         SessionOrders so = bySession.get(s.id);
-        if (so == null) bySession.set(s.id, so = new SessionOrders());
+        if (so == null) {
+            bySession.set(s.id, so = new SessionOrders());
+            so.epoch = s.epoch;
+        } else if (so.epoch != s.epoch) {
+            // Sequence numbers restarted (new trading day or reset): MsgSeqNum and ExecID values
+            // from before the restart no longer identify anything.
+            so.epoch = s.epoch;
+            so.execIds = new LongLongMap();
+            clearRing(s.forward);
+            clearRing(s.reverse);
+        }
         return so;
+    }
+
+    private void clearRing(DirectionState d) {
+        if (d.id < rings.size()) rings.set(d.id, null);
     }
 
     private Ring ring(DirectionState d, boolean create) {
@@ -91,6 +108,7 @@ public final class OrderBook {
 
     private OrderState create(SessionOrders so, SessionState session, String rootId) {
         OrderState o = new OrderState(session, rootId);
+        o.epoch = session.epoch;
         so.byClOrdId.put(rootId, o);
         all.add(o);
         return o;
@@ -108,7 +126,7 @@ public final class OrderBook {
         return switch (t) {
             case 'D' -> newOrder(m, dir);
             case 'G', 'F' -> changeRequest(m, dir, t);
-            case '8' -> executionReport(m, dir, su.possDup);
+            case '8' -> executionReport(m, dir, su.possDup, su.gapResend);
             case '9' -> cancelReject(m, dir);
             case '3', 'j' -> reject(m, dir, t);
             default -> null;
@@ -122,8 +140,15 @@ public final class OrderBook {
         upd.clOrdId = id;
         SessionOrders so = orders(dir.session);
         OrderState o = so.byClOrdId.get(id);
-        if (o == null) o = create(so, dir.session, id);
-        else if (o.seenNew()) upd.duplicateClOrdId = true;
+        if (o == null) {
+            o = create(so, dir.session, id);
+        } else if (o.seenNew() && (o.terminal() || o.epoch != dir.session.epoch)) {
+            // The ClOrdID is reused for a new order: after the old one finished, or on a later
+            // day / after a sequence reset. Start a fresh chain rather than merging the two.
+            o = create(so, dir.session, id);
+        } else if (o.seenNew()) {
+            upd.duplicateClOrdId = true;
+        }
         if (!o.seenNew()) {
             o.newRef = m.ref();
             o.newTime = m.time();
@@ -169,7 +194,7 @@ public final class OrderBook {
         return upd;
     }
 
-    private OrderUpdate executionReport(FixMessage m, DirectionState dir, boolean possDup) {
+    private OrderUpdate executionReport(FixMessage m, DirectionState dir, boolean possDup, boolean lateResend) {
         String id = m.get(Tags.CL_ORD_ID);
         String orig = m.get(Tags.ORIG_CL_ORD_ID);
         if (id == null && orig == null) return null;
@@ -237,12 +262,23 @@ public final class OrderBook {
         upd.prevStatus = o.status;
         upd.prevCumQty = o.cumQty;
         upd.wasTerminal = o.terminal();
+        upd.lateResend = lateResend;
         upd.firstExec = o.firstExecTime == io.fixbreak.util.Times.UNKNOWN;
         if (upd.firstExec) o.firstExecTime = m.time();
 
         if (trade && lastQty > 0) o.sumLastQty += lastQty;
         else if (bust && lastQty > 0) o.sumLastQty -= lastQty;
         else if (correct && !Double.isNaN(cum)) o.sumLastQty = cum; // a correction restates the running total
+
+        if (lateResend) {
+            // A PossDup resend filling a sequence gap is older than reports already applied:
+            // count its fill, but do not let its stale CumQty, LeavesQty or status overwrite newer ones.
+            String lateOrderId = m.get(Tags.ORDER_ID);
+            if (o.orderId == null && lateOrderId != null && !lateOrderId.equals("NONE")) o.orderId = lateOrderId;
+            upd.orderQty = !Double.isNaN(qty) ? qty : o.orderQty;
+            touch(o, m);
+            return upd;
+        }
 
         if (!Double.isNaN(cum)) o.cumQty = cum;
         if (!Double.isNaN(leaves)) o.leavesQty = leaves;
@@ -308,11 +344,17 @@ public final class OrderBook {
 
     private OrderUpdate reject(FixMessage m, DirectionState dir, char type) {
         upd.reset(type);
+        orders(dir.session); // applies a pending sequence-epoch change, clearing stale request history
         OrderState o = null;
         Ring ring = ring(dir.opposite(), false);
         long refSeq = m.getLong(Tags.REF_SEQ_NUM, -1);
         int slot = ring == null || refSeq < 0 ? -1 : ring.find(refSeq);
-        if (slot >= 0) {
+        String refMsgType = m.get(Tags.REF_MSG_TYPE);
+        if (ring != null && slot >= 0 && refMsgType != null && !refMsgType.isEmpty()
+                && (refMsgType.length() != 1 || refMsgType.charAt(0) != ring.type[slot])) {
+            slot = -1; // RefMsgType(372) says the rejected message was something else
+        }
+        if (ring != null && slot >= 0) {
             o = ring.order[slot];
             upd.referencedRef = ring.ref[slot];
             upd.referencedMsgType = ring.type[slot];

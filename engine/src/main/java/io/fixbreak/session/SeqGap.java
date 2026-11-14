@@ -17,6 +17,8 @@ public final class SeqGap {
     public long resendRequestRef;
     /** Highest missing sequence number later covered by a PossDup resend or a GapFill. */
     public long coveredTo;
+    /** Created by a SequenceReset without GapFill: the sender declared these numbers lost, so they can never be recovered. */
+    public boolean hardReset;
     public int resentMessages;
     public int gapFills;
     public long firstRecoveryRef;
@@ -39,7 +41,7 @@ public final class SeqGap {
 
     /** True once resends and gap fills have covered every missing number. */
     public boolean recovered() {
-        return !tooLow && coveredTo >= to;
+        return !tooLow && !hardReset && coveredTo >= to;
     }
 
     boolean contains(long seq) {

@@ -15,10 +15,11 @@ public final class FixMessage {
     private final int count;
     private final int fileIdx;
     private final long line;
+    private final int part;
     private long time = Times.UNKNOWN;
     private boolean timeParsed;
 
-    FixMessage(String raw, int start, int[] tags, int[] vs, int[] ve, int count, int fileIdx, long line) {
+    FixMessage(String raw, int start, int[] tags, int[] vs, int[] ve, int count, int fileIdx, long line, int part) {
         this.raw = raw;
         this.start = start;
         this.tags = tags;
@@ -27,6 +28,7 @@ public final class FixMessage {
         this.count = count;
         this.fileIdx = fileIdx;
         this.line = line;
+        this.part = part;
     }
 
     public int fieldCount() {
@@ -98,7 +100,8 @@ public final class FixMessage {
         }
         if (plain) return v;
         try {
-            return Double.parseDouble(raw.substring(s, e));
+            double d = Double.parseDouble(raw.substring(s, e));
+            return Double.isFinite(d) ? d : Double.NaN; // "NaN", "Infinity" and overflow are not quantities
         } catch (NumberFormatException ex) {
             return Double.NaN;
         }
@@ -129,6 +132,6 @@ public final class FixMessage {
 
     /** Compact reference to the log line this message came from. */
     public long ref() {
-        return Refs.of(fileIdx, line);
+        return Refs.of(fileIdx, line, part);
     }
 }

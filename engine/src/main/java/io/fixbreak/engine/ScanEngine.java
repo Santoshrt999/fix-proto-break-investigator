@@ -63,14 +63,17 @@ public final class ScanEngine {
             try (LineReader reader = LineReader.open(path)) {
                 String line;
                 while ((line = reader.next()) != null) {
-                    if (!parser.parse(line, fileIdx, reader.lineNo(), res)) {
-                        if (!line.isBlank()) nonFixLines++;
-                        continue;
+                    int from = 0;
+                    for (int part = 0; from >= 0; part++) {
+                    if (!parser.parse(line, from, part, fileIdx, reader.lineNo(), res)) {
+                        if (part == 0 && !line.isBlank()) nonFixLines++;
+                        break;
                     }
+                    from = res.next;
                     FixMessage m = res.msg;
                     if (res.issue != null) {
                         issues.computeIfAbsent(res.issue, k -> new long[1])[0]++;
-                        ParseIssue issue = new ParseIssue(res.issue, res.detail, fileIdx, reader.lineNo(),
+                        ParseIssue issue = new ParseIssue(res.issue, res.detail, fileIdx, reader.lineNo(), part,
                                 m == null ? Times.UNKNOWN : m.time());
                         for (Rule r : rules) r.onParseIssue(issue, findings);
                     }
@@ -95,6 +98,13 @@ public final class ScanEngine {
                     ctx.newGap = su.newGap;
                     ctx.update = ou;
                     for (Rule r : rules) r.onMessage(ctx, findings);
+                    }
+                }
+                if (reader.damaged() != null) {
+                    issues.computeIfAbsent(FixLineParser.Issue.TRUNCATED, k -> new long[1])[0]++;
+                    ParseIssue issue = new ParseIssue(FixLineParser.Issue.TRUNCATED, reader.damaged(), fileIdx,
+                            reader.lineNo() + 1, lastTime);
+                    for (Rule r : rules) r.onParseIssue(issue, findings);
                 }
                 files.add(new FileStat(path.toString(), Files.size(path), reader.lineNo()));
             }

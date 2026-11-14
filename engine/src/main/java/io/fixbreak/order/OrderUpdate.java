@@ -32,6 +32,8 @@ public final class OrderUpdate {
     public char prevStatus;
     public double prevCumQty;
     public boolean wasTerminal;
+    /** A PossDup resend that filled a sequence gap: older than reports already applied, so its CumQty/status were not applied. */
+    public boolean lateResend;
     /** True for the first ExecutionReport the order ever received. */
     public boolean firstExec;
     /** Line of the earlier report with the same ExecID(17), when this one is not flagged PossDup/PossResend. 0 otherwise. */
@@ -68,6 +70,7 @@ public final class OrderUpdate {
         prevCumQty = 0;
         wasTerminal = false;
         firstExec = false;
+        lateResend = false;
         duplicateExecRef = 0;
         unknownOrigClOrdId = null;
         duplicateClOrdId = false;

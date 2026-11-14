@@ -17,7 +17,7 @@ final class Args {
     private static final Set<String> VALUE_OPTIONS = Set.of(
             "format", "since", "until", "session", "severity", "limit", "dict", "mask-tags", "ack-timeout",
             "rule", "out", "expected", "seed", "orders", "delimiter");
-    private static final Set<String> FLAGS = Set.of("no-mask", "help");
+    private static final Set<String> FLAGS = Set.of("no-mask", "help", "force");
 
     final List<String> positional = new ArrayList<>();
     private final Map<String, String> options = new HashMap<>();
@@ -37,6 +37,7 @@ final class Args {
                 name = name.substring(0, eq);
             }
             if (FLAGS.contains(name)) {
+                if (value != null) throw new UsageException("Option --" + name + " takes no value (got --" + name + "=" + value + ")");
                 options.put(name, "true");
             } else if (VALUE_OPTIONS.contains(name)) {
                 if (value == null) {

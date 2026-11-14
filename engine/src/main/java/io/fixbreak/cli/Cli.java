@@ -76,8 +76,14 @@ final class Cli {
             }
             String rule = args.get("rule");
             if (rule != null) {
+                Set<String> known = new java.util.TreeSet<>();
+                for (io.fixbreak.rules.Rule r : io.fixbreak.rules.Rules.defaults()) known.add(r.id());
                 Set<String> ids = new HashSet<>();
-                for (String r : rule.split(",")) ids.add(r.trim().toUpperCase(java.util.Locale.ROOT));
+                for (String r : rule.split(",")) {
+                    String id = r.trim().toUpperCase(java.util.Locale.ROOT);
+                    if (!known.contains(id)) throw new UsageException("--rule: unknown rule '" + r.trim() + "'. Known rules: " + String.join(", ", known));
+                    ids.add(id);
+                }
                 config.ruleFilter = ids;
             }
             config.since = time("since");
@@ -89,11 +95,33 @@ final class Cli {
     long time(String option) {
         String v = args.get(option);
         if (v == null) return Times.UNKNOWN;
-        long t = Times.parseLoose(v);
+        long t = parseCliTime(v.trim());
         if (t == Times.UNKNOWN) {
-            throw new UsageException("--" + option + " must look like 2026-01-05T09:30:00 or 20260105-09:30:00 (UTC), got '" + v + "'");
+            throw new UsageException("--" + option + " must be a valid time like 2026-01-05T09:30:00 (UTC), 2026-01-05T11:30:00+02:00"
+                    + " or 20260105-09:30:00, got '" + v + "'");
         }
         return t;
+    }
+
+    /** Strict CLI time parsing: ISO with or without offset (no offset = UTC), or FIX UTCTimestamp. Out-of-range fields are rejected. */
+    static long parseCliTime(String v) {
+        try {
+            return java.time.OffsetDateTime.parse(v).toInstant().toEpochMilli();
+        } catch (java.time.format.DateTimeParseException ignored) {
+            // try the next form
+        }
+        try {
+            return java.time.LocalDateTime.parse(v.replace(' ', 'T')).toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+        } catch (java.time.format.DateTimeParseException ignored) {
+            // try the next form
+        }
+        try {
+            java.time.format.DateTimeFormatter fix = java.time.format.DateTimeFormatter.ofPattern("uuuuMMdd-HH:mm:ss[.SSS]")
+                    .withResolverStyle(java.time.format.ResolverStyle.STRICT);
+            return java.time.LocalDateTime.parse(v, fix).toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+        } catch (java.time.format.DateTimeParseException ignored) {
+            return Times.UNKNOWN;
+        }
     }
 
     /** Input files from the positional arguments starting at {@code from}. */

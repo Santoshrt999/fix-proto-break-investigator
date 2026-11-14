@@ -265,4 +265,43 @@ class MainTest {
         Map<String, Object> r = json("scan", LOG, "--rule", "NO_ACK", "--ack-timeout", "3600");
         assertEquals(0L, (Long) at(r, "summary", "findings"), "the log is shorter than an hour");
     }
+
+    @Test
+    void grepRefusesValuesOnMaskedTags() {
+        assertEquals(2, run("grep", "1=A*", LOG));
+        assertTrue(stdout.contains("is masked"), stdout);
+        assertEquals(0, run("grep", "1", LOG, "--limit", "1"));
+    }
+
+    @Test
+    void grepMatchesTextAsItIsShown() {
+        Map<String, Object> r = json("grep", "58=*closing auction*", LOG);
+        assertEquals(1, ((Number) r.get("matches")).intValue());
+    }
+
+    @Test
+    void maskedEnumTagsAreNotDecoded() {
+        Map<String, Object> r = json("grep", "35=D", LOG, "--mask-tags", "54", "--limit", "1");
+        String fields = r.get("messages").toString();
+        assertTrue(fields.contains("Side(54)=***"), fields);
+        assertFalse(fields.contains("(Buy)"), fields);
+    }
+
+    @Test
+    void generateNeverOverwritesWithoutForce(@TempDir Path dir) throws IOException {
+        Path existing = dir.resolve("real.log");
+        Files.writeString(existing, "keep me");
+        assertEquals(2, run("generate", "--out", existing.toString(), "--expected", "none"));
+        assertEquals("keep me", Files.readString(existing));
+        assertEquals(0, run("generate", "--out", existing.toString(), "--expected", "none", "--force"));
+    }
+
+    @Test
+    void badOptionValuesAreRejected() {
+        assertEquals(2, run("grep", "35=D", LOG, "--no-mask=false"));
+        assertEquals(2, run("scan", LOG, "--since", "2026-13-45T99:99:99"));
+        assertEquals(2, run("scan", LOG, "--rule", "INVALID_STATE"));
+        assertEquals(2, run("scan", LOG, "--session", "NOPE-NOPE"));
+        assertEquals(0, run("scan", LOG, "--since", "2026-01-05T11:00:00+01:00", "--limit", "1"));
+    }
 }

@@ -26,6 +26,8 @@ public final class SessionTracker {
         public boolean possDup;
         /** A PossDup resend of a sequence number that was already seen; downstream state must not apply it twice. */
         public boolean duplicateResend;
+        /** A PossDup resend that filled a recorded gap: it arrives after later messages and is older than them. */
+        public boolean gapResend;
         /** A gap revealed by this message, if any. */
         public SeqGap newGap;
     }
@@ -85,6 +87,7 @@ public final class SessionTracker {
         upd.direction = dir;
         upd.possDup = m.is(Tags.POSS_DUP_FLAG, 'Y');
         upd.duplicateResend = false;
+        upd.gapResend = false;
         upd.newGap = null;
 
         sess.messages++;
@@ -166,6 +169,19 @@ public final class SessionTracker {
             // Reset mode: MsgSeqNum is ignored and the stream simply continues from NewSeqNo.
             dir.hardResets++;
             seqEvent(dir, "SequenceReset-Reset", ref, time, seq, newSeq);
+            if (newSeq > 0 && dir.expectedSeq > 0) {
+                if (newSeq > dir.expectedSeq) {
+                    // Numbers skipped by a hard reset are declared lost: an unrecoverable gap.
+                    SeqGap g = addGap(new SeqGap(dir, dir.expectedSeq, newSeq - 1, false, dir.lastRef, ref, time));
+                    g.hardReset = true;
+                    upd.newGap = g;
+                } else if (newSeq < dir.expectedSeq) {
+                    // The FIX spec forbids a NewSeqNo lower than the next expected number.
+                    SeqGap g = addGap(new SeqGap(dir, newSeq, dir.expectedSeq, true, dir.lastRef, ref, time));
+                    g.hardReset = true;
+                    upd.newGap = g;
+                }
+            }
             if (newSeq > 0) dir.expectedSeq = newSeq;
             dir.lastSeq = seq;
             return;
@@ -178,6 +194,7 @@ public final class SessionTracker {
 
         boolean restart = logon && (m.is(Tags.RESET_SEQ_NUM_FLAG, 'Y') || (seq == 1 && dir.expectedSeq > 1));
         if (dir.expectedSeq < 0 || restart) {
+            if (restart) dir.session.epoch++;
             dir.expectedSeq = next;
         } else if (seq == dir.expectedSeq) {
             dir.expectedSeq = next;
@@ -196,6 +213,7 @@ public final class SessionTracker {
                 filled = true;
             }
             if (!filled && !gapFill) upd.duplicateResend = true;
+            if (filled && !gapFill) upd.gapResend = true;
             if (next > dir.expectedSeq && gapFill) dir.expectedSeq = next;
             return;
         } else {

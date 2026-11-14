@@ -17,7 +17,7 @@ public final class InvalidStateTransitionRule implements Rule {
     @Override
     public void onMessage(MessageContext ctx, FindingSink out) {
         OrderUpdate u = ctx.update;
-        if (u == null || u.msgType != '8' || !u.applied) return;
+        if (u == null || u.msgType != '8' || !u.applied || u.lateResend) return;
         if (u.tradeCancel || u.tradeCorrect || u.execType == 'D' || u.execType == 'I') return; // legitimate restatements
         String problem = null;
         Severity severity = Severity.HIGH;

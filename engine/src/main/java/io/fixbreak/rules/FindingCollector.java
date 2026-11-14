@@ -59,7 +59,7 @@ public final class FindingCollector implements FindingSink {
         findings.add(new Finding(rule.id() + "-" + seq, rule.id(), severity,
                 session == null ? null : session.name,
                 order == null ? List.of() : order.chain(),
-                firstTime, lastTime, summary, java.util.Arrays.copyOf(refs, n)));
+                firstTime, lastTime, cap(summary), java.util.Arrays.copyOf(refs, n)));
     }
 
     public long total() {
@@ -89,5 +89,12 @@ public final class FindingCollector implements FindingSink {
 
     public List<Finding> all() {
         return findings;
+    }
+
+    /** Keeps summaries one line long even when they quote a very long Text(58). */
+    static final int MAX_SUMMARY = 400;
+
+    private static String cap(String s) {
+        return s == null || s.length() <= MAX_SUMMARY ? s : s.substring(0, MAX_SUMMARY - 3) + "...";
     }
 }

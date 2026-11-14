@@ -55,7 +55,7 @@
       "ruleId": "SEQ_GAP",
       "clOrdId": null,
       "session": "BUYSIDE1-BROKERY",
-      "note": "BROKERY silent for 95s, then three messages missing; ResendRequest never answered"
+      "note": "No message from BROKERY for 115s, then three messages missing; ResendRequest never answered"
     },
     {
       "ruleId": "OVERFILL",

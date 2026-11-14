@@ -29,6 +29,16 @@ final class GenerateCommand {
         Path log = Path.of(cli.args.get("out", "samples/day1.log"));
         String expectedArg = cli.args.get("expected", "samples/expected-findings.json");
 
+        // Read-only by default: never replace an existing file (it could be a real log) unless asked.
+        boolean force = cli.args.flag("force");
+        List<Path> targets = new ArrayList<>(List.of(log));
+        if (!expectedArg.equals("none")) targets.add(Path.of(expectedArg));
+        for (Path p : targets) {
+            if (Files.exists(p) && !force) {
+                throw new UsageException("generate: " + p + " already exists. Pass --force to overwrite it, or choose another --out/--expected path.");
+            }
+        }
+
         if (log.getParent() != null) Files.createDirectories(log.getParent());
         SampleGenerator gen = new SampleGenerator(opt);
         List<SampleGenerator.Planted> planted;

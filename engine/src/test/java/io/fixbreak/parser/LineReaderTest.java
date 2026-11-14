@@ -78,4 +78,20 @@ class LineReaderTest {
             assertNull(r.next());
         }
     }
+
+    @Test
+    void truncatedGzipEndsTheFileInsteadOfFailing(@TempDir Path dir) throws IOException {
+        Path gz = dir.resolve("t.log.gz");
+        try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(gz))) {
+            for (int i = 0; i < 20_000; i++) out.write(("line " + i + " with some text to compress\n").getBytes(StandardCharsets.ISO_8859_1));
+        }
+        byte[] all = Files.readAllBytes(gz);
+        Files.write(gz, java.util.Arrays.copyOf(all, all.length / 2));
+        int lines = 0;
+        try (LineReader r = LineReader.open(gz)) {
+            while (r.next() != null) lines++;
+            assertNotNull(r.damaged());
+        }
+        assertTrue(lines > 0);
+    }
 }

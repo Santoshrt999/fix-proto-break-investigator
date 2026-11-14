@@ -2,6 +2,8 @@ package io.fixbreak.cli;
 
 import io.fixbreak.cli.Args.UsageException;
 import io.fixbreak.engine.ScanConfig;
+import io.fixbreak.mask.Masker;
+import io.fixbreak.parser.Tags;
 import io.fixbreak.parser.FixLineParser;
 import io.fixbreak.parser.FixMessage;
 import io.fixbreak.parser.LineReader;
@@ -18,12 +20,14 @@ import java.util.regex.Pattern;
 /** {@code fixscan grep}: messages whose fields match every given {@code tag=value}, decoded and masked. */
 final class GrepCommand {
     private record Term(int tag, String exact, Pattern glob) {
-        boolean matches(FixMessage m) {
+        boolean matches(FixMessage m, Masker masker) {
             // a tag can repeat (repeating groups), so look at every occurrence
             for (int i = 0; i < m.fieldCount(); i++) {
                 if (m.tagAt(i) != tag) continue;
                 if (exact == null && glob == null) return true;
                 String v = m.valueAt(i);
+                // Free text is matched as it would be shown, so a search cannot probe masked names.
+                if (tag == Tags.TEXT && masker.enabled()) v = masker.text(Masker.display(v), m);
                 if (exact != null ? exact.equals(v) : glob.matcher(v).matches()) return true;
             }
             return false;
@@ -44,6 +48,9 @@ final class GrepCommand {
             if (tag == null) throw new UsageException("grep: unknown tag '" + tagText.trim() + "' (use a tag number, or a name from the dictionary)");
             if (eq < 0) {
                 terms.add(new Term(tag, null, null));
+            } else if (config.masker.masksWholeTag(tag)) {
+                throw new UsageException("grep: " + config.dict.label(tag) + " is masked, and searching its values would reveal them. "
+                        + "Use the bare tag (grep " + tag + ") to find messages that carry it, or --no-mask if you are allowed to see that data.");
             } else {
                 String value = part.substring(eq + 1);
                 if (value.indexOf('*') < 0) {
@@ -66,7 +73,7 @@ final class GrepCommand {
 
         // Cheap pre-filter: a line cannot match unless it contains every literal value somewhere.
         List<String> literals = new ArrayList<>();
-        for (Term t : terms) if (t.exact != null && !t.exact.isEmpty()) literals.add("=" + t.exact);
+        for (Term t : terms) if (t.exact != null && !t.exact.isEmpty() && t.tag != Tags.TEXT) literals.add("=" + t.exact);
 
         Render render = new Render(files, config);
         FixLineParser parser = new FixLineParser();
@@ -79,9 +86,14 @@ final class GrepCommand {
                 next:
                 while ((line = reader.next()) != null) {
                     for (String lit : literals) if (!line.contains(lit)) continue next;
-                    if (!parser.parse(line, fileIdx, reader.lineNo(), res) || res.msg == null) continue;
+                    int from = 0;
+                    msgs:
+                    for (int part = 0; from >= 0; part++) {
+                    if (!parser.parse(line, from, part, fileIdx, reader.lineNo(), res)) break;
+                    from = res.next;
+                    if (res.msg == null) continue;
                     FixMessage m = res.msg;
-                    for (Term t : terms) if (!t.matches(m)) continue next;
+                    for (Term t : terms) if (!t.matches(m, config.masker)) continue msgs;
                     long time = m.time();
                     if (since != Times.UNKNOWN && time != Times.UNKNOWN && time < since) continue;
                     if (until != Times.UNKNOWN && time != Times.UNKNOWN && time > until) continue;
@@ -97,6 +109,7 @@ final class GrepCommand {
                     if (res.issue != null) e.put("parseIssue", res.issue + ": " + res.detail);
                     e.put("fields", render.decode(m));
                     shown.add(e);
+                    }
                 }
             }
         }
@@ -104,6 +117,9 @@ final class GrepCommand {
         out.put("query", spec);
         out.put("matches", total);
         out.put("shown", shown.size());
+        if (total == 0 && session != null) {
+            out.put("hint", "No messages matched. Check the session name against 'fixscan stats' (names look like SENDER-TARGET).");
+        }
         if (total > shown.size()) out.put("hint", "Showing the first " + shown.size() + ". Add more tag=value terms, --since/--until, --session, or raise --limit.");
         out.put("messages", shown);
         return out;

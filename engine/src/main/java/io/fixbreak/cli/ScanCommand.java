@@ -22,6 +22,11 @@ final class ScanCommand {
         int limit = Math.max(0, cli.args.getInt("limit", 50));
         ScanEngine engine = new ScanEngine(config, Rules.defaults());
         engine.scan(files);
+        if (config.sessionFilter != null && engine.sessions.find(config.sessionFilter) == null) {
+            List<String> names = new ArrayList<>();
+            for (SessionState s : engine.sessions.sessions()) names.add(s.name);
+            throw new Args.UsageException("--session: no session '" + config.sessionFilter + "' in these files. Sessions: " + String.join(", ", names));
+        }
 
         Map<String, Object> out = cli.result("scan");
         Map<String, Object> summary = new LinkedHashMap<>();

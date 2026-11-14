@@ -27,6 +27,8 @@ public final class SessionState {
     public int heartBtInt;
     public long logons;
     public long logouts;
+    /** Incremented whenever sequence numbers restart (Logon with ResetSeqNumFlag, or MsgSeqNum back to 1 on Logon). IDs may be reused across epochs. */
+    public int epoch;
     public final List<Lifecycle> lifecycle = new ArrayList<>();
 
     SessionState(int id, String sender, String target) {

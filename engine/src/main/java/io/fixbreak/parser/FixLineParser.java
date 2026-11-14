@@ -23,20 +23,33 @@ public final class FixLineParser {
         public String detail;
         /** True when the message has enough structure (MsgType present, not cut short) to feed the order state machine. */
         public boolean complete;
+        /** Where to look for another message on the same line, or -1 when the line is used up. */
+        public int next = -1;
     }
 
     private int[] tags = new int[64];
     private int[] vs = new int[64];
     private int[] ve = new int[64];
 
-    /** Returns false when the line contains no FIX message at all. */
+    /** Parses the first message on the line. Returns false when the line contains no FIX message at all. */
     public boolean parse(String line, int fileIdx, long lineNo, Result out) {
+        return parse(line, 0, 0, fileIdx, lineNo, out);
+    }
+
+    /**
+     * Parses the next message on the line, starting the search at {@code from}. {@code part} is
+     * the message's position on the line (0 for the first). Returns false when there is no
+     * further FIX message; {@link Result#next} says where to continue.
+     */
+    public boolean parse(String line, int from, int part, int fileIdx, long lineNo, Result out) {
         out.msg = null;
         out.issue = null;
         out.detail = null;
         out.complete = false;
+        out.next = -1;
+        if (from < 0 || from >= line.length()) return false;
 
-        int start = line.indexOf("8=FIX");
+        int start = line.indexOf("8=FIX", from);
         while (start > 0 && isDigit(line.charAt(start - 1))) {
             start = line.indexOf("8=FIX", start + 1); // e.g. "108=FIX..." inside some other text
         }
@@ -65,6 +78,7 @@ public final class FixLineParser {
         } else {
             out.issue = Issue.MALFORMED;
             out.detail = "unrecognised field delimiter after BeginString";
+            out.next = nextStart(line, start + 5);
             return true;
         }
 
@@ -84,6 +98,11 @@ public final class FixLineParser {
             }
             if (p == pos || p >= n || line.charAt(p) != '=') {
                 cutShort = true; // partial or garbage tag: the line was cut or corrupted here
+                break;
+            }
+            if (tag == Tags.BEGIN_STRING && count > 0) {
+                cutShort = true; // a new message starts before this one reached its CheckSum
+                out.next = pos;
                 break;
             }
             int valStart = p + 1;
@@ -111,6 +130,8 @@ public final class FixLineParser {
             pos = end + delimLen;
         }
 
+        if (sawChecksum) out.next = ve[count - 1];
+        else if (out.next < 0 && cutShort) out.next = nextStart(line, pos);
         if (count == 0) {
             out.issue = Issue.TRUNCATED;
             out.detail = "no complete field";
@@ -118,7 +139,7 @@ public final class FixLineParser {
         }
         FixMessage msg = new FixMessage(line, start,
                 java.util.Arrays.copyOf(tags, count), java.util.Arrays.copyOf(vs, count),
-                java.util.Arrays.copyOf(ve, count), count, fileIdx, lineNo);
+                java.util.Arrays.copyOf(ve, count), count, fileIdx, lineNo, part);
         out.msg = msg;
         boolean hasMsgType = msg.has(Tags.MSG_TYPE);
 
@@ -173,6 +194,13 @@ public final class FixLineParser {
             if (k == j && line.substring(j).isBlank()) return idx;
             idx++;
         }
+    }
+
+    /** Start of the next "8=FIX" at or after {@code from} that is not part of a longer tag, or -1. */
+    private static int nextStart(String line, int from) {
+        int s = line.indexOf("8=FIX", Math.max(0, from));
+        while (s > 0 && isDigit(line.charAt(s - 1))) s = line.indexOf("8=FIX", s + 1);
+        return s;
     }
 
     private void grow() {

@@ -18,7 +18,7 @@ public final class OverfillRule implements Rule {
     @Override
     public void onMessage(MessageContext ctx, FindingSink out) {
         OrderUpdate u = ctx.update;
-        if (u == null || u.msgType != '8' || !u.applied) return;
+        if (u == null || u.msgType != '8' || !u.applied || u.lateResend) return;
         if (Double.isNaN(u.cumQty) || Double.isNaN(u.orderQty) || u.cumQty <= u.orderQty + Describe.EPS) return;
         if (!u.order.markOnce(OrderState.MARK_OVERFILL)) return;
         out.report(this, Severity.CRITICAL, ctx.session, u.order, u.order.newTime, ctx.msg.time(),

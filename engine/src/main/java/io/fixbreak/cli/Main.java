@@ -29,17 +29,18 @@ public final class Main {
               fixscan grep <tag=value>[,tag=value] <files...>       matching messages, decoded (value may use *)
               fixscan explain-tag <tag> [value]                     dictionary meaning of a tag or enum value
               fixscan rules                                         list the break detectors
-              fixscan generate [--out f] [--expected f] [--seed n]  write the synthetic sample log
+              fixscan generate [--out f] [--expected f] [--seed n] [--force]  write the synthetic sample log (never overwrites without --force)
 
-            Filters (scan):  --since T --until T   --session A-B   --severity CRITICAL|HIGH|MEDIUM|LOW   --rule ID[,ID]
-                             times are UTC, e.g. 2026-01-05T09:30:00
+            Filters (scan):  --since T --until T   --session A-B   --severity S (S and above)   --rule ID[,ID]
+                             times are UTC unless an offset is given, e.g. 2026-01-05T09:30:00 or 2026-01-05T10:30:00+01:00
             Options:
               --format json|text   output format (default json)
               --limit N            cap on findings / messages / timeline entries shown
               --ack-timeout SECS   NO_ACK threshold (default 30)
               --dict FILE          extra or overriding tag definitions (JSON)
               --mask-tags 50,57    additional tags to mask
-              --no-mask            show Account(1), ClientID(109), PartyID(448) and Text(58) contents unmasked
+              --no-mask            show masked values (Account, ClientID, PartyID, other account tags, Text) unmasked
+              --force              (generate) overwrite existing files
 
             Files may be plain text or gzip. Field delimiters SOH, '|' and '^A' are recognised.
             """.formatted(VERSION);
@@ -93,6 +94,8 @@ public final class Main {
             return fail(out, err, text, "File not found: " + e.getFile(), 1);
         } catch (IOException e) {
             return fail(out, err, text, "I/O error: " + e.getMessage(), 1);
+        } catch (OutOfMemoryError e) {
+            return fail(out, err, text, "Out of memory. Give the JVM more heap, for example FIXSCAN_JAVA_OPTS=-Xmx4g, or scan fewer files at once.", 1);
         }
     }
 

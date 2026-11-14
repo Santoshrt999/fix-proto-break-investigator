@@ -87,7 +87,6 @@ public final class SampleGenerator {
         long qty;
         double px;
         long cum;
-        double notional;
         String account;
         String trader;
 
@@ -441,7 +440,7 @@ public final class SampleGenerator {
         at(start + 19 * min + 25, () -> ack(stuck));
         at(start + 19 * min + 2_300, () -> fill(stuck, 300));
 
-        // SEQ_GAP (unrecovered) on BROKERY: 95 seconds of silence, three messages lost, ResendRequest ignored.
+        // SEQ_GAP (unrecovered) on BROKERY: a 95 s outage (115 s with no message at all, counting the idle time before it), three messages lost, ResendRequest ignored.
         at(outageStart, () -> y.brokerSilent = true);
         at(outageStart + 62_000, () -> emit(y, true, "1", b -> b.add(112, "TEST-" + Times.fix(clock).substring(9, 17).replace(":", ""))));
         at(outageEnd, () -> {
@@ -449,7 +448,7 @@ public final class SampleGenerator {
             y.brokerSeq += 3;
             y.brokerSilent = false;
             emit(y, false, "0", null);
-            plant("SEQ_GAP", y, null, "BROKERY silent for 95s, then three messages missing; ResendRequest never answered");
+            plant("SEQ_GAP", y, null, "No message from BROKERY for 115s, then three messages missing; ResendRequest never answered");
             clock += 5;
             emit(y, true, "2", b -> b.add(7, gapStart).add(16, 0));
         });

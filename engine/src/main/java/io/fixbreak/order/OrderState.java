@@ -67,6 +67,8 @@ public final class OrderState {
 
     /** True if the NewOrderSingle was refused with a session-level Reject(3) or BusinessMessageReject(j). */
     public boolean rejectedBeforeAck;
+    /** SessionState.epoch when this order was created: ClOrdIDs may be reused in a later epoch. */
+    public int epoch;
     /** True if this state was created for an OrigClOrdID that the log never introduced. */
     public boolean placeholder;
 

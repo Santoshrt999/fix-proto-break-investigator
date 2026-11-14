@@ -96,7 +96,9 @@ final class Render {
             if (v == null) continue;
             String name = dict.tagName(tag);
             String shown = masker.value(tag, Masker.display(v), msg);
-            if (tag == 371) {
+            if (masker.masksWholeTag(tag)) {
+                // never decode a masked value: its meaning would reveal it
+            } else if (tag == 371) {
                 Integer ref = dict.resolveTag(v);
                 if (ref != null && dict.tagName(ref) != null) shown = v + " (" + dict.tagName(ref) + ")";
             } else if (tag == 372) {
@@ -109,6 +111,9 @@ final class Render {
         return m;
     }
 
+    /** Longest field value shown by grep; long free text is cut so output stays small. */
+    static final int MAX_VALUE = 300;
+
     /** Every field of a message as {@code Name(tag)=value (meaning)}, masked. Framing tags 8, 9 and 10 are left out. */
     List<String> decode(FixMessage msg) {
         List<String> out = new ArrayList<>();
@@ -118,7 +123,8 @@ final class Render {
             if (tag == 8 || tag == 9 || tag == 10) continue;
             String v = msg.valueAt(i);
             String shown = config.masker.value(tag, Masker.display(v), msg);
-            String meaning = dict.valueName(tag, v);
+            String meaning = config.masker.masksWholeTag(tag) ? null : dict.valueName(tag, v);
+            if (shown != null && shown.length() > MAX_VALUE) shown = shown.substring(0, MAX_VALUE - 3) + "...";
             out.add(dict.label(tag) + "=" + shown + (meaning == null ? "" : " (" + meaning + ")"));
         }
         return out;

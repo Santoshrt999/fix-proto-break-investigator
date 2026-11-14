@@ -107,4 +107,29 @@ class MaskerTest {
         assertEquals(120, ex.length());
         assertTrue(ex.endsWith("..."));
     }
+
+    @Test
+    void masksIdentitiesTheReviewFoundLeaking() {
+        String[][] cases = {
+                {"Unknown ClientID HEDGEFUND_A", "HEDGEFUND_A"},
+                {"account owner Jane Doe", "Jane Doe"},
+                {"call +1 212 555 0199 about it", "555 0199"},
+                {"user jdoe logged out", "jdoe"},
+                {"limit hit for SMITHJ / 9876543", "9876543"},
+        };
+        for (String[] c : cases) {
+            String out = masker.text(c[0], null);
+            assertFalse(out.contains(c[1]), c[0] + " -> " + out);
+        }
+        assertEquals("user not found", masker.text("user not found", null));
+        assertEquals("Order exceeds limit: notional 15500000.00 > max 10000000.00",
+                masker.text("Order exceeds limit: notional 15500000.00 > max 10000000.00", null));
+    }
+
+    @Test
+    void otherAccountAndPartyTagsAreMaskedByDefault() {
+        for (int tag : new int[] {79, 440, 523, 524, 355}) {
+            assertEquals(Masker.MASK, masker.value(tag, "ALLOC12345678", null), "tag " + tag);
+        }
+    }
 }

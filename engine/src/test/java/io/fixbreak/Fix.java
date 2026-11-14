@@ -45,6 +45,12 @@ public final class Fix {
         return this;
     }
 
+    /** Both sides restart their sequence numbers at 1, as after a ResetSeqNumFlag Logon or a new day. */
+    public Fix resetSequences() {
+        nextSeq.clear();
+        return this;
+    }
+
     public long peekSeq(String sender, String target) {
         return nextSeq.getOrDefault(sender + ">" + target, 1L);
     }

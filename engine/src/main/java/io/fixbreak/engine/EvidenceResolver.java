@@ -56,8 +56,17 @@ public final class EvidenceResolver {
                     }
                     String raw = reader.next();
                     if (raw == null) break;
-                    parser.parse(raw, fileIdx, target, res);
-                    cache.put(Refs.of(fileIdx, target), new Line(Refs.of(fileIdx, target), name, target, raw, res.msg));
+                    // Cache every message on the line under its own position, so a ref to the
+                    // second message on a line resolves to that message, not the first.
+                    int from = 0;
+                    for (int part = 0; part <= Refs.MAX_PART; part++) {
+                        boolean found = parser.parse(raw, from, part, fileIdx, target, res);
+                        if (!found && part > 0) break;
+                        long ref = Refs.of(fileIdx, target, part);
+                        cache.put(ref, new Line(ref, name, target, raw, found ? res.msg : null));
+                        from = res.next;
+                        if (!found || from < 0) break;
+                    }
                 }
             }
         }

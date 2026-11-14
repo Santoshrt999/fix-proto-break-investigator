@@ -197,8 +197,10 @@ reset or restarted); no message at all for more than about twice HeartBtInt.
 fixscan masks these by default; they show as `***`:
 
 - Account (1), ClientID (109), PartyID (448)
-- Inside Text (58): account-like tokens, email addresses, and names following words such as
-  "account", "client", "trader", "user"
+- Inside Text (58): account-like tokens (letters with a run of 5+ digits, or 9+ digit numbers),
+  email addresses, and identifiers or names following cue words such as "account", "acct",
+  "client", "customer", "trader", "user", "party", "portfolio", "book", "Mr/Mrs/Ms/Dr". The rest
+  of the reject text stays readable, because the reason matters for the diagnosis
 - Any extra tags given with `--mask-tags`
 
 Order identifiers (11, 41, 37, 17), symbols, quantities, prices and reject codes are not masked.

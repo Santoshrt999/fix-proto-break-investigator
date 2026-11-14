@@ -88,12 +88,18 @@ bin/fixscan scan  samples/day1.log --format text                # every planted 
 bin/fixscan order ORD-000018 samples/day1.log --format text     # one order's full story
 ```
 
-**2. Install the plugin in Claude Code:**
+**2. Install the plugin in Claude Code.** Run these as **two separate commands**, one at a
+time (pasting both lines at once fails):
 
 ```text
-/plugin marketplace add Santoshrt999/fix-proto-break-investigator
+/plugin marketplace add https://github.com/Santoshrt999/fix-proto-break-investigator.git
+```
+
+```text
 /plugin install fix-break-investigator@fix-tools
 ```
+
+Then restart Claude Code.
 
 **3. Ask a question from inside the cloned folder:**
 
@@ -124,13 +130,16 @@ fix-proto-break-investigator/
 <details open>
 <summary><b>Option A: from GitHub, inside Claude Code (recommended)</b></summary>
 
+Run each command on its own, and wait for it to finish before the next one.
+
 1. Start Claude Code: `claude`
 2. Register the marketplace. This reads `.claude-plugin/marketplace.json` from the repo:
    ```text
-   /plugin marketplace add Santoshrt999/fix-proto-break-investigator
+   /plugin marketplace add https://github.com/Santoshrt999/fix-proto-break-investigator.git
    ```
+   The short form `/plugin marketplace add Santoshrt999/fix-proto-break-investigator` works too.
    You should see `Successfully added marketplace: fix-tools`.
-3. Install the plugin from that marketplace:
+3. Install the plugin from that marketplace (a separate command):
    ```text
    /plugin install fix-break-investigator@fix-tools
    ```
@@ -147,7 +156,7 @@ fix-proto-break-investigator/
 The same steps with the `claude` CLI, handy for scripts and onboarding docs:
 
 ```sh
-claude plugin marketplace add Santoshrt999/fix-proto-break-investigator
+claude plugin marketplace add https://github.com/Santoshrt999/fix-proto-break-investigator.git
 claude plugin install fix-break-investigator@fix-tools
 
 # verify
@@ -475,6 +484,8 @@ summary and up to five evidence lines (`file:line` plus the masked message).
 
 | Symptom | Fix |
 | --- | --- |
+| `... is not a valid GitHub owner/repo shorthand` | Two commands were pasted as one. Run `/plugin marketplace add https://github.com/Santoshrt999/fix-proto-break-investigator.git` on its own, then `/plugin install fix-break-investigator@fix-tools` |
+| `Cannot add marketplace "fix-tools": its source doesn't match its extraKnownMarketplaces entry` | `fix-tools` is already registered from another source (for example a local clone). Run `/plugin marketplace remove fix-tools`, then add it again |
 | `Java 21 or newer is required` | Install a JDK 21+ (for example Temurin) or set `JAVA_HOME` |
 | First run is slow or fails with `build failed` | The first run builds the jar and downloads Maven once. Build by hand: `cd engine && ./mvnw -DskipTests package` |
 | Claude says `fixscan: command not found` | Check the plugin is enabled (`claude plugin list`) and restart Claude Code. For a manual install, put `bin/fixscan` on your PATH |

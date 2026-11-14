@@ -72,6 +72,31 @@ Built-in tag and enum definitions live in
 the public FIX specifications. Venue or firm custom tags belong in a user's own `--dict` file,
 not in this repository.
 
+## Maintainer notes: publishing
+
+Things to check when publishing the repository or moving it.
+
+- **The CI badge shows "no status" until the first workflow run.** The badge at the top of
+  `README.md` points at `.github/workflows/ci.yml` on GitHub. It stays grey until that workflow
+  has run once, which happens on the first push. After pushing, check it turns green in the
+  Actions tab. If it fails there but passes locally, look at the JDK first: CI uses JDK 21, and
+  local development may use a newer one.
+- **The repository path is hardcoded.** The install instructions and links assume the repository
+  lives at `Santoshrt999/fix-proto-break-investigator` on GitHub. If it is renamed,
+  transferred to an organisation or forked for release, update every occurrence:
+  ```sh
+  git grep -n 'Santoshrt999/fix-proto-break-investigator'
+  ```
+  At the time of writing this finds `README.md` (badge, clone URL, `/plugin marketplace add`
+  commands, team `settings.json` example) and `.claude-plugin/plugin.json` (`homepage`,
+  `repository`). Then run `claude plugin validate .` and reinstall from the new path to check:
+  ```sh
+  claude plugin marketplace add <new-owner>/<new-repo>
+  claude plugin install fix-break-investigator@fix-tools
+  ```
+  The marketplace name (`fix-tools`) and the plugin name (`fix-break-investigator`) do not
+  depend on the repository name, so `fix-break-investigator@fix-tools` stays the same.
+
 ## Pull requests
 
 - One logical change per PR, with tests.

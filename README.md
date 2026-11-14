@@ -510,6 +510,10 @@ New break detectors, dictionary entries and playbook improvements are welcome. S
 [CONTRIBUTING.md](CONTRIBUTING.md). In short: `cd engine && ./mvnw verify`, use synthetic data
 only, and keep everything read-only.
 
+Maintainers publishing, renaming or forking the repository: see
+[Maintainer notes: publishing](CONTRIBUTING.md#maintainer-notes-publishing) (CI badge status and
+the hardcoded repository path).
+
 ## 📄 License
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

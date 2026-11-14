@@ -1,0 +1,115 @@
+{
+  "description": "Breaks planted in day1.log by 'fixscan generate'. A scan of that file must report exactly these findings (ruleId + clOrdId), no more and no fewer. clOrdId is the first ClOrdID of the order's amend/cancel chain; null for session-level findings.",
+  "seed": 42,
+  "orders": 160,
+  "findings": [
+    {
+      "ruleId": "ORDER_REJECTED",
+      "clOrdId": "ORD-000018",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Notional 15.5m exceeds the broker's 10m per-order limit"
+    },
+    {
+      "ruleId": "SESSION_REJECT",
+      "clOrdId": "ORD-000036",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "NewOrderSingle sent with Side(54)=Z, refused by the broker's FIX engine"
+    },
+    {
+      "ruleId": "BUSINESS_REJECT",
+      "clOrdId": "ORD-000050",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Broker application could not route the order"
+    },
+    {
+      "ruleId": "PARSE_ERROR",
+      "clOrdId": null,
+      "session": null,
+      "note": "Heartbeat from BROKERX with a wrong CheckSum(10)"
+    },
+    {
+      "ruleId": "CANCEL_REPLACE_REJECTED",
+      "clOrdId": "ORD-000069",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Cancel request crossed with the final fill"
+    },
+    {
+      "ruleId": "SEQ_GAP",
+      "clOrdId": null,
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Two messages from BROKERX missing; recovered with ResendRequest and SequenceReset-GapFill"
+    },
+    {
+      "ruleId": "NO_ACK",
+      "clOrdId": "ORD-000096",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "NewOrderSingle never acknowledged"
+    },
+    {
+      "ruleId": "STUCK_PARTIAL",
+      "clOrdId": "ORD-000118",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Filled 300 of 1000, no further reports"
+    },
+    {
+      "ruleId": "SEQ_GAP",
+      "clOrdId": null,
+      "session": "BUYSIDE1-BROKERY",
+      "note": "BROKERY silent for 95s, then three messages missing; ResendRequest never answered"
+    },
+    {
+      "ruleId": "OVERFILL",
+      "clOrdId": "ORD-000131",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Two fills of 300 against an order for 500"
+    },
+    {
+      "ruleId": "QTY_MISMATCH",
+      "clOrdId": "ORD-000144",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Second fill reports LastQty 300 but CumQty 600 after a first fill of 200"
+    },
+    {
+      "ruleId": "DUPLICATE_EXEC",
+      "clOrdId": "ORD-000167",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "First fill of 200 sent twice with the same ExecID"
+    },
+    {
+      "ruleId": "PARSE_ERROR",
+      "clOrdId": null,
+      "session": null,
+      "note": "Heartbeat to BROKERY truncated mid-line"
+    },
+    {
+      "ruleId": "BROKEN_CHAIN",
+      "clOrdId": "ORD-900001",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Cancel request refers to an OrigClOrdID that is not in the log"
+    },
+    {
+      "ruleId": "CANCEL_REPLACE_REJECTED",
+      "clOrdId": "ORD-900001",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "...and the broker rejects it as an unknown order"
+    },
+    {
+      "ruleId": "INVALID_STATE_TRANSITION",
+      "clOrdId": "ORD-000195",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Fill of 100 reported two seconds after the order was canceled"
+    },
+    {
+      "ruleId": "CANCEL_REPLACE_REJECTED",
+      "clOrdId": "ORD-000211",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "Amend chain: the final cancel is rejected as too late (closing auction)"
+    },
+    {
+      "ruleId": "STUCK_PARTIAL",
+      "clOrdId": "ORD-000211",
+      "session": "BUYSIDE1-BROKERX",
+      "note": "...and the order is then filled 600 of 1500 with no terminal state"
+    }
+  ]
+}

@@ -33,4 +33,7 @@ if [ ! -f "$JAR" ]; then
   fi
 fi
 
-exec "$JAVA" -jar "$JAR" "$@"
+# A scan is a short batch job: the parallel collector gives the best throughput on large logs.
+# Override with FIXSCAN_JAVA_OPTS (for example "-Xmx6g" for multi-gigabyte logs).
+# shellcheck disable=SC2086
+exec "$JAVA" ${FIXSCAN_JAVA_OPTS:--XX:+UseParallelGC} -jar "$JAR" "$@"

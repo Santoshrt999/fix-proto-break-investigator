@@ -1,0 +1,20 @@
+{
+  "name": "fix-tools",
+  "owner": {
+    "name": "fix-break-investigator contributors"
+  },
+  "metadata": {
+    "description": "Open-source tools for investigating FIX protocol trade breaks."
+  },
+  "plugins": [
+    {
+      "name": "fix-break-investigator",
+      "source": "./",
+      "description": "Find out why a trade broke by scanning FIX logs: a read-only Java engine detects breaks, and an investigator skill reports the root cause with file:line evidence.",
+      "version": "0.1.0",
+      "license": "Apache-2.0",
+      "category": "productivity",
+      "keywords": ["fix", "trading", "trade-breaks", "log-analysis"]
+    }
+  ]
+}

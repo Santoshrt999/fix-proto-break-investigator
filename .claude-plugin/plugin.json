@@ -1,0 +1,12 @@
+{
+  "name": "fix-break-investigator",
+  "version": "0.1.0",
+  "description": "Find out why a trade broke (rejected, never acknowledged, stuck partial fill, sequence gap, overfill) by scanning FIX logs with a read-only, deterministic engine and an investigator skill that reports a root cause with evidence.",
+  "author": {
+    "name": "fix-break-investigator contributors"
+  },
+  "homepage": "https://github.com/Santoshrt999/fix-proto-break-investigator",
+  "repository": "https://github.com/Santoshrt999/fix-proto-break-investigator",
+  "license": "Apache-2.0",
+  "keywords": ["fix", "fix-protocol", "trading", "trade-breaks", "execution-reports", "log-analysis", "post-trade"]
+}

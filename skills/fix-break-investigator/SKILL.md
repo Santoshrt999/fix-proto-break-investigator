@@ -195,6 +195,10 @@ Other findings in these logs not part of this question, one line each (or "None"
 ```
 
 Rules for the report:
+- Before writing, recheck every number you derived: compute time gaps from the two cited
+  timestamps (e.g. 10:07:12.066 to 10:07:12.504 is 438 ms) and totals from the cited values.
+- Say whose log it is as established in Scope (the side whose CompID sends the orders), and do
+  not attribute it to the counterparty.
 - Cite lines exactly as fixscan printed them (`day1.log:82`). Cite the message line, not the
   finding id.
 - Quote reject text exactly as fixscan printed it, masked parts included.
